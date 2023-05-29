@@ -110,3 +110,16 @@ end
 function GetRagdollTime(ply)
     return ply:GetNWInt("RagdollTime", 10)
 end
+
+hook.Add("EntityTakeDamage", "RagdollDamageDetection", function(target, dmgInfo)
+    local attacker = dmgInfo:GetAttacker()
+
+    -- Vérifiez si l'attaquant est un ragdoll et la cible est un joueur
+    if IsValid(attacker) and attacker:IsRagdoll() and target:IsPlayer() or target:IsNPC() then
+        local ragdollOwner = attacker:GetOwner()
+
+        if IsValid(ragdollOwner) and ragdollOwner:IsPlayer() then
+            dmgInfo:SetAttacker(ragdollOwner) -- Définir le joueur tireur comme l'attaquant
+        end
+    end
+end)

@@ -73,6 +73,8 @@ function SWEP:PrimaryAttack()
         ragdoll:SetAngles(shootDir:Angle())
         ragdoll:Spawn()
 
+        ragdoll:SetOwner(ply)
+
         local ragdollPhys = ragdoll:GetPhysicsObject()
         if IsValid(ragdollPhys) then
             local mass = GetRagdollMass(ply) -- Obtenir la masse personnalisée pour le joueur
