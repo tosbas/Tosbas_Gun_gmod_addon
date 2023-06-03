@@ -11,13 +11,13 @@ SWEP.UseHands = true
 SWEP.Primary.ClipSize = 16
 SWEP.Primary.DefaultClip = 16
 SWEP.Primary.Automatic = true
-SWEP.Primary.Ammo = "Pistol"
-SWEP.Primary.Delay = 1
+SWEP.Primary.Ammo = ""
+SWEP.Primary.Delay = 0.5
 
-SWEP.Secondary.ClipSize = -1
-SWEP.Secondary.DefaultClip = -1
+SWEP.Secondary.ClipSize = 16
+SWEP.Secondary.DefaultClip = 16
 SWEP.Secondary.Automatic = false
-SWEP.Secondary.Ammo = "none"
+SWEP.Secondary.Ammo = ""
 
 SWEP.DefaultRagdollMass = 500 -- Masse du ragdoll par défaut
 SWEP.DefaultRagdollVelocity = 10000 -- Vitesse du ragdoll par défaut
@@ -53,10 +53,6 @@ end
 
 function SWEP:PrimaryAttack()
     if not self:CanPrimaryAttack() then return end
-    
-    if self.IsFiring then return end -- Vérification si le tir est déjà en cours
-
-    self.IsFiring = true -- Marquer le tir en cours
 
     self:ShootEffects() -- Effets visuels du tir, remplacez cette ligne si nécessaire
 
@@ -65,28 +61,36 @@ function SWEP:PrimaryAttack()
         local shootPos = ply:GetShootPos()
         local shootDir = ply:GetAimVector()
 
-        local ragdoll = ents.Create("prop_ragdoll")
-        if not IsValid(ragdoll) then return end
+        local targetModel = self.TargetModel or "models/Humans/Group01/male_01.mdl"
+        local entClass = "prop_ragdoll" -- Classe par défaut
 
-        ragdoll:SetModel("models/Humans/Group01/male_01.mdl")
-        ragdoll:SetPos(shootPos + shootDir)
-        ragdoll:SetAngles(shootDir:Angle())
-        ragdoll:Spawn()
+        if IsValid(self.TargetEntity) and not self.TargetEntity:IsNPC() then
+            -- Utiliser la classe de l'entité visée si ce n'est pas un NPC
+            entClass = self.TargetEntity:GetClass()
+        end
 
-        ragdoll:SetOwner(ply)
+        local ent = ents.Create(entClass)
+        if not IsValid(ent) then return end
 
-        local ragdollPhys = ragdoll:GetPhysicsObject()
-        if IsValid(ragdollPhys) then
+        ent:SetModel(targetModel)
+        ent:SetPos(shootPos + shootDir)
+        ent:SetAngles(shootDir:Angle())
+        ent:Spawn()
+
+        ent:SetOwner(ply)
+
+        local entPhys = ent:GetPhysicsObject()
+        if IsValid(entPhys) then
             local mass = GetRagdollMass(ply) -- Obtenir la masse personnalisée pour le joueur
             local velocity = GetRagdollVelocity(ply) -- Obtenir la vitesse personnalisée pour le joueur
-            
-            ragdollPhys:SetMass(mass)
-            ragdollPhys:SetVelocity(velocity * shootDir)
-            ragdollPhys:SetMaterial("gmod_bouncy")
-            
+
+            entPhys:SetMass(mass)
+            entPhys:SetVelocity(velocity * shootDir)
+            entPhys:SetMaterial("gmod_bouncy")
+
             timer.Simple(GetRagdollTime(ply), function()
-                if IsValid(ragdoll) then
-                    ragdoll:Remove()
+                if IsValid(ent) then
+                    ent:Remove()
                 end
             end)
         end
@@ -95,13 +99,33 @@ function SWEP:PrimaryAttack()
     self:SetNextPrimaryFire(CurTime() + self.Primary.Delay)
 end
 
-function SWEP:Think()
-    if not self.IsFiring then return end
+function SWEP:SecondaryAttack()
+    if not self:CanSecondaryAttack() then return end
 
     local ply = self:GetOwner()
-    if not IsValid(ply) or not ply:KeyDown(IN_ATTACK) then
-        self.IsFiring = false -- Réinitialiser l'état du tir si le joueur arrête de tirer
+    local trace = ply:GetEyeTrace()
+    local entity = trace.Entity
+
+    -- Vérifier si l'entité visée est valide et n'est pas la classe "worldspawn"
+    if IsValid(entity) and entity:GetClass() ~= "worldspawn" then
+        local targetModel = entity:GetModel()
+
+        -- Vérifier si le modèle est valide pour l'entité visée
+        if util.IsValidModel(targetModel) then
+            -- Stocker le modèle dans une variable accessible par SWEP:PrimaryAttack()
+            self.TargetModel = targetModel
+            self.TargetEntity = entity
+
+            print("Target model:", targetModel)
+        else
+            print("Le modèle n'est pas valide pour l'entité visée.")
+        end
+    else
+        -- Aucune entité visée, ne rien faire
+        return
     end
+
+    self:SetNextSecondaryFire(CurTime() + self.Primary.Delay)
 end
 
 function SWEP:SetRagdollMass(mass)
