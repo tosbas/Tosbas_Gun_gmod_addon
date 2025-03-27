@@ -22,6 +22,8 @@ SWEP.Secondary.Ammo = ""
 SWEP.DefaultRagdollMass = 500 -- Masse du ragdoll par défaut
 SWEP.DefaultRagdollVelocity = 10000 -- Vitesse du ragdoll par défaut
 SWEP.DefaultRagdollTime = 10 -- Délai de disparation du ragdoll par défaut
+SWEP.DefaultModeOwner = true
+SWEP.DefaultModeBouncing = true
 
 function SWEP:Initialize()
     self:SetHoldType("pistol") -- Animation de tenue de l'arme
@@ -30,6 +32,8 @@ function SWEP:Initialize()
     self:SetRagdollMass(self.DefaultRagdollMass)
     self:SetRagdollVelocity(self.DefaultRagdollVelocity)
     self:SetRagdollTime(self.DefaultRagdollTime)
+    self:SetModeOwner(self.DefaultModeOwner)
+    self:SetModeBoucing(self.DefaultModeBouncing)
 end
 
 -- Fonction pour obtenir la masse personnalisée du ragdoll pour le joueur donné
@@ -51,6 +55,17 @@ local function GetRagdollTime(ply)
 end
 
 
+local function GetModeOwner(ply)
+
+    return ply:GetNWString("modeOwner", "true")
+end
+
+local function GetModeBouncing(ply)
+
+    return ply:GetNWString("modeBouncing", "true")
+end
+
+
 function SWEP:PrimaryAttack()
     if not self:CanPrimaryAttack() then return end
 
@@ -62,31 +77,41 @@ function SWEP:PrimaryAttack()
         local shootDir = ply:GetAimVector()
 
         local targetModel = self.TargetModel or "models/Humans/Group01/male_01.mdl"
-        local entClass = "prop_ragdoll" -- Classe par défaut
+        local entClass = self.TargetClass or "prop_ragdoll" -- Classe par défaut
 
         if IsValid(self.TargetEntity) and not self.TargetEntity:IsNPC() then
             -- Utiliser la classe de l'entité visée si ce n'est pas un NPC
             entClass = self.TargetEntity:GetClass()
+           
         end
+
+       
 
         local ent = ents.Create(entClass)
         if not IsValid(ent) then return end
 
         ent:SetModel(targetModel)
-        ent:SetPos(shootPos + shootDir)
+        ent:SetPos(shootPos + shootDir * 150)
         ent:SetAngles(shootDir:Angle())
         ent:Spawn()
 
-        ent:SetOwner(ply)
+        if tobool(GetModeOwner(ply)) then
+            ent:SetOwner(ply)
+        end
 
-        local entPhys = ent:GetPhysicsObject()
+       
+
+        local entPhys = ent:GetPhysicsObject() 
+  
         if IsValid(entPhys) then
             local mass = GetRagdollMass(ply) -- Obtenir la masse personnalisée pour le joueur
             local velocity = GetRagdollVelocity(ply) -- Obtenir la vitesse personnalisée pour le joueur
-
             entPhys:SetMass(mass)
             entPhys:SetVelocity(velocity * shootDir)
-            entPhys:SetMaterial("gmod_bouncy")
+
+            if tobool(GetModeBouncing(ply)) then
+                entPhys:SetMaterial("gmod_bouncy")
+            end
 
             timer.Simple(GetRagdollTime(ply), function()
                 if IsValid(ent) then
@@ -102,27 +127,31 @@ end
 function SWEP:SecondaryAttack()
     if not self:CanSecondaryAttack() then return end
 
+    local excludedEntities = {
+        ["worldspawn"] = true,
+        ["prop_vehicle_jeep"] = true
+    }
+    
     local ply = self:GetOwner()
     local trace = ply:GetEyeTrace()
     local entity = trace.Entity
 
     -- Vérifier si l'entité visée est valide et n'est pas la classe "worldspawn"
-    if IsValid(entity) and entity:GetClass() ~= "worldspawn" then
+    if IsValid(entity) and not excludedEntities[entity:GetClass()] then
         local targetModel = entity:GetModel()
+        local entClass = entity:GetClass()
 
+   
         -- Vérifier si le modèle est valide pour l'entité visée
         if util.IsValidModel(targetModel) then
             -- Stocker le modèle dans une variable accessible par SWEP:PrimaryAttack()
             self.TargetModel = targetModel
-            self.TargetEntity = entity
+            self.TargetClass = entClass
 
-            print("Target model:", targetModel)
-        else
-            print("Le modèle n'est pas valide pour l'entité visée.")
+            print("Entity selected :", entClass)
         end
     else
-        -- Aucune entité visée, ne rien faire
-        return
+        print("The entity cannot be copied.")
     end
 
     self:SetNextSecondaryFire(CurTime() + self.Primary.Delay)
@@ -148,8 +177,24 @@ function SWEP:SetRagdollTime(time)
     self.RagdollTime = time
 end
 
+function SWEP:SetModeOwner(modeOwner)
+    self.ModeOwner = modeOwner
+end
+
 function SWEP:GetRagdollTime()
     return self.RagdollTime or self.DefaultRagdollTime
+end
+
+function SWEP:GetModeOwner()
+    return self.ModeOwner or self.DefaultModeOwner
+end
+
+function SWEP:SetModeBoucing(modeBouncing)
+    self.modeBouncing = modeBouncing
+end
+
+function SWEP:GetModeBouncing()
+    return self.ModeBouncing or self.DefaultModeBouncing
 end
 
 
